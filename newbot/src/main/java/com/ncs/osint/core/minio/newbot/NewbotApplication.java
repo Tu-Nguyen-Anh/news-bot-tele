@@ -57,7 +57,7 @@ public class NewbotApplication implements CommandLineRunner {
 
   public static class VNExpressAutoBot extends TelegramLongPollingBot {
 
-    private static final String BOT_TOKEN = "6486019715:AAGpQwiPGIhS_mf2Wcev--9OOEvik4Y2nYA";
+    private static final String BOT_TOKEN = "7759170307:AAGRfrebGT7wxi7BYxRvw-AjykerhoHWhfI";
     private static final String BOT_USERNAME = "VNExpressJavaBot";
     private static final String BASE_URL = "https://vnexpress.net/";
 
@@ -66,19 +66,6 @@ public class NewbotApplication implements CommandLineRunner {
     private final Set<String> sentArticles = new HashSet<>(); // Lưu trữ bài viết đã gửi để tránh trùng lặp
     private int totalSentToday = 0; // Đếm số bài viết đã gửi hôm nay
 
-/*    @Override
-    public void onUpdateReceived(Update update) {
-      if (update.hasMessage() && update.getMessage().hasText()) {
-        String chatId = update.getMessage().getChatId().toString();
-        String messageText = update.getMessage().getText();
-
-        if (messageText.equals("/start")) {
-          sendMessage(chatId, "Chào mừng bạn đến với bot của Nguyễn Anh Tú! Tôi sẽ tự động gửi bài viết mới nhất từ VNExpress.");
-        } else {
-          sendMessage(chatId, "Lệnh không hợp lệ. Tôi sẽ tự động gửi tin tức mới nhất cho bạn.");
-        }
-      }
-    }*/
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -87,14 +74,25 @@ public class NewbotApplication implements CommandLineRunner {
         String messageText = update.getMessage().getText();
 
         if (messageText.startsWith("/n")) {
-          // Xử lý lệnh /news
+          // Xử lý lệnh /n
           int limit = 5; // Mặc định lấy 5 bài viết
+          int option = 1; // Mặc định là BASE_URL = "https://vnexpress.net/"
           String[] parts = messageText.split(" ");
+
           if (parts.length > 1) {
             try {
-              limit = Integer.parseInt(parts[1]); // Lấy số lượng bài viết từ lệnh
+              option = Integer.parseInt(parts[1]); // Lấy danh mục từ lệnh
             } catch (NumberFormatException e) {
-              sendMessage(chatId, "Vui lòng nhập số lượng bài viết hợp lệ (ví dụ: /n 5).");
+              sendMessage(chatId, "Vui lòng nhập option hợp lệ (ví dụ: /n 1).");
+              return;
+            }
+          }
+
+          if (parts.length > 2) {
+            try {
+              limit = Integer.parseInt(parts[2]); // Lấy số lượng bài viết từ lệnh
+            } catch (NumberFormatException e) {
+              sendMessage(chatId, "Vui lòng nhập số lượng bài viết hợp lệ (ví dụ: /n 1 5).");
               return;
             }
           }
@@ -104,8 +102,15 @@ public class NewbotApplication implements CommandLineRunner {
             return;
           }
 
+          // Lấy BASE_URL theo option
+          String selectedUrl = getBaseUrl(option);
+          if (selectedUrl == null) {
+            sendMessage(chatId, "Vui lòng nhập option từ 1 đến 11 (ví dụ: /n 1 5).");
+            return;
+          }
+
           // Gọi hàm lấy tin tức và gửi về chat
-          List<String> newsList = getNews(limit);
+          List<String> newsList = getNews(selectedUrl, limit);
           if (newsList.isEmpty() || newsList.get(0).contains("Không thể lấy dữ liệu")) {
             sendMessage(chatId, "Hiện không thể lấy tin tức từ VNExpress. Vui lòng thử lại sau.");
           } else {
@@ -113,12 +118,66 @@ public class NewbotApplication implements CommandLineRunner {
               sendMessage(chatId, news);
             }
           }
-        } else if (messageText.equals("/start")) {
-          sendMessage(chatId, "Chào mừng bạn đến với bot của Nguyễn Anh Tú! Dùng lệnh /n <số lượng> để đọc báo.");
+        } else if (messageText.equals("/h")) {
+          sendMessage(chatId, "Chào mừng bạn đến với bot VNExpress!\n"
+                              + "Dùng lệnh /n <option> <số lượng> để đọc báo theo danh mục:\n"
+                              + "1: Trang chủ\n"
+                              + "2: Thể thao\n"
+                              + "3: Góc nhìn\n"
+                              + "4: Bất động sản\n"
+                              + "5: Giáo dục\n"
+                              + "6: Sức khỏe\n"
+                              + "7: Công nghệ (AI)\n"
+                              + "8: Ý kiến.");
         } else {
-          sendMessage(chatId, "Lệnh không hợp lệ. Dùng /n <số lượng> để đọc báo.");
+          sendMessage(chatId, "Lệnh không hợp lệ. Dùng /n <option> <số lượng> để đọc báo.");
         }
       }
+    }
+
+    // Hàm lấy BASE_URL theo danh mục
+    private String getBaseUrl(int option) {
+      switch (option) {
+        case 1:
+          return "https://vnexpress.net/";
+        case 2:
+          return "https://vnexpress.net/the-thao";
+        case 3:
+          return "https://vnexpress.net/goc-nhin";
+        case 4:
+          return "https://vnexpress.net/bat-dong-san";
+        case 5:
+          return "https://vnexpress.net/giao-duc";
+        case 6:
+          return "https://vnexpress.net/suc-khoe";
+        case 7:
+          return "https://vnexpress.net/cong-nghe/ai";
+        case 8:
+          return "https://vnexpress.net/y-kien";
+        default:
+          return null;
+      }
+    }
+
+    // Hàm lấy tin tức từ danh mục được chọn
+    private List<String> getNews(String baseUrl, int limit) {
+      List<String> newsList = new ArrayList<>();
+      try {
+        Document doc = Jsoup.connect(baseUrl).get();
+        Elements articles = doc.select("article.item-news");
+        for (int i = 0; i < Math.min(limit, articles.size()); i++) {
+          Element article = articles.get(i);
+          String title = article.select("h3.title-news > a").text();
+          String link = article.select("h3.title-news > a").attr("href");
+          String description = article.select("p.description > a").text();
+
+          newsList.add(String.format("Tiêu đề: %s\nMô tả: %s\nLink: %s", title, description, link));
+        }
+      } catch (IOException e) {
+        newsList.add("Không thể lấy dữ liệu từ VNExpress. Vui lòng thử lại sau.");
+        e.printStackTrace();
+      }
+      return newsList;
     }
 
 
